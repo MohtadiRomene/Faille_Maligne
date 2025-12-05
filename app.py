@@ -1,0 +1,78 @@
+from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory
+import os
+from werkzeug.utils import secure_filename
+
+app = Flask(__name__)
+app.secret_key = 'dev_secret_key_123'
+
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'php', 'py', 'sh'}
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+def allowed_file(filename):
+    return '.' in filename
+
+@app.route('/')
+def index():
+    products = [
+        {'id': 1, 'name': 'Laptop Pro', 'price': 1299.99, 'image': 'laptop.jpg'},
+        {'id': 2, 'name': 'Smartphone X', 'price': 899.99, 'image': 'phone.jpg'},
+        {'id': 3, 'name': 'Tablet Ultra', 'price': 599.99, 'image': 'tablet.jpg'},
+        {'id': 4, 'name': 'Smartwatch', 'price': 299.99, 'image': 'watch.jpg'},
+    ]
+    return render_template('index.html', products=products)
+
+@app.route('/product/<int:product_id>')
+def product(product_id):
+    return render_template('product.html', product_id=product_id)
+
+@app.route('/profile')
+def profile():
+    files = os.listdir(UPLOAD_FOLDER) if os.path.exists(UPLOAD_FOLDER) else []
+    return render_template('profile.html', files=files)
+
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    if 'file' not in request.files:
+        flash('Aucun fichier sélectionné', 'error')
+        return redirect(url_for('profile'))
+    
+    file = request.files['file']
+    
+    if file.filename == '':
+        flash('Aucun fichier sélectionné', 'error')
+        return redirect(url_for('profile'))
+    
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+        flash(f'Fichier {filename} uploadé avec succès!', 'success')
+        return redirect(url_for('profile'))
+    
+    flash('Type de fichier non autorisé', 'error')
+    return redirect(url_for('profile'))
+
+@app.route('/uploads/<filename>')
+def uploaded_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+@app.route('/execute/<filename>')
+def execute_file(filename):
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    if os.path.exists(filepath):
+        with open(filepath, 'r') as f:
+            code = f.read()
+        try:
+            exec(code)
+            return "Fichier exécuté"
+        except Exception as e:
+            return f"Erreur: {str(e)}"
+    return "Fichier non trouvé"
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8080, debug=True)
